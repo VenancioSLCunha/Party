@@ -1,11 +1,14 @@
 package br.edu.ulbra.election.party.service;
 
+import br.edu.ulbra.election.party.client.CandidateClientService;
 import br.edu.ulbra.election.party.exception.GenericOutputException;
 import br.edu.ulbra.election.party.input.v1.PartyInput;
 import br.edu.ulbra.election.party.model.Party;
+import br.edu.ulbra.election.party.output.v1.CandidateOutput;
 import br.edu.ulbra.election.party.output.v1.GenericOutput;
 import br.edu.ulbra.election.party.output.v1.PartyOutput;
 import br.edu.ulbra.election.party.repository.PartyRepository;
+import feign.FeignException;
 import org.apache.commons.lang.StringUtils;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,13 +24,16 @@ public class PartyService {
 
     private final ModelMapper modelMapper;
 
+    private CandidateClientService candidateClientService;
+
     private static final String MESSAGE_INVALID_ID = "Invalid id";
     private static final String MESSAGE_PARTY_NOT_FOUND = "Party not found";
 
     @Autowired
-    public PartyService(PartyRepository partyRepository, ModelMapper modelMapper){
+    public PartyService(PartyRepository partyRepository, CandidateClientService candidateClientService, ModelMapper modelMapper){
         this.partyRepository = partyRepository;
         this.modelMapper = modelMapper;
+        this.candidateClientService = candidateClientService;
     }
 
     public List<PartyOutput> getAll(){
@@ -75,6 +81,17 @@ public class PartyService {
         return modelMapper.map(party, PartyOutput.class);
     }
 
+    public void verifyPartyCandidate(Long id){
+        List<CandidateOutput> candidates = candidateClientService.getAll();
+        CandidateOutput candidate;
+        for(int i = 0; i < candidates.size(); i++){
+            candidate = candidates.get(i);
+            if(candidate.getPartyOutput().getId()==id){
+                throw new GenericOutputException("Party has candidates yet");
+            }
+        }
+    }
+
     public GenericOutput delete(Long partyId) {
         if (partyId == null){
             throw new GenericOutputException(MESSAGE_INVALID_ID);
@@ -85,6 +102,13 @@ public class PartyService {
             throw new GenericOutputException(MESSAGE_PARTY_NOT_FOUND);
         }
 
+        try{
+            verifyPartyCandidate(partyId);
+        }catch(FeignException e){
+            if(e.status() == 500){
+                throw new GenericOutputException("Invalid Candidate");
+            }
+        }
         partyRepository.delete(party);
 
         return new GenericOutput("Party deleted");
