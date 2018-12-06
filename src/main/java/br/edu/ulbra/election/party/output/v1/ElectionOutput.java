@@ -36,17 +36,14 @@ public class ElectionOutput {
     }
 
     public void setStateCode(String stateCode) {
-
         this.stateCode = stateCode;
     }
 
     public String getDescription() {
-
         return description;
     }
 
     public void setDescription(String description) {
-
         this.description = description;
     }
 }

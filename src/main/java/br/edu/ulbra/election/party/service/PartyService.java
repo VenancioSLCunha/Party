@@ -22,15 +22,15 @@ public class PartyService {
 
     private final PartyRepository partyRepository;
 
-    private final ModelMapper modelMapper;
+    private final CandidateClientService candidateClientService;
 
-    private CandidateClientService candidateClientService;
+    private final ModelMapper modelMapper;
 
     private static final String MESSAGE_INVALID_ID = "Invalid id";
     private static final String MESSAGE_PARTY_NOT_FOUND = "Party not found";
 
     @Autowired
-    public PartyService(PartyRepository partyRepository, CandidateClientService candidateClientService, ModelMapper modelMapper){
+    public PartyService(PartyRepository partyRepository, ModelMapper modelMapper, CandidateClientService candidateClientService){
         this.partyRepository = partyRepository;
         this.modelMapper = modelMapper;
         this.candidateClientService = candidateClientService;
@@ -74,22 +74,13 @@ public class PartyService {
             throw new GenericOutputException(MESSAGE_PARTY_NOT_FOUND);
         }
 
+        validateIntegrity(partyId);
+
         party.setCode(partyInput.getCode());
         party.setName(partyInput.getName());
         party.setNumber(partyInput.getNumber());
         party = partyRepository.save(party);
         return modelMapper.map(party, PartyOutput.class);
-    }
-
-    public void verifyPartyCandidate(Long id){
-        List<CandidateOutput> candidates = candidateClientService.getAll();
-        CandidateOutput candidate;
-        for(int i = 0; i < candidates.size(); i++){
-            candidate = candidates.get(i);
-            if(candidate.getPartyOutput().getId()==id){
-                throw new GenericOutputException("Party has candidates yet");
-            }
-        }
     }
 
     public GenericOutput delete(Long partyId) {
@@ -102,13 +93,8 @@ public class PartyService {
             throw new GenericOutputException(MESSAGE_PARTY_NOT_FOUND);
         }
 
-        try{
-            verifyPartyCandidate(partyId);
-        }catch(FeignException e){
-            if(e.status() == 500){
-                throw new GenericOutputException("Invalid Candidate");
-            }
-        }
+        validateIntegrity(partyId);
+
         partyRepository.delete(party);
 
         return new GenericOutput("Party deleted");
@@ -122,6 +108,17 @@ public class PartyService {
         party = partyRepository.findFirstByNumber(partyInput.getNumber());
         if (party != null && !party.getId().equals(id)){
             throw new GenericOutputException("Duplicate Number");
+        }
+    }
+
+    private void validateIntegrity(Long partyId){
+        try {
+            List<CandidateOutput> candidateOutputList = candidateClientService.getByParty(partyId);
+            if (candidateOutputList.isEmpty()){
+                throw new GenericOutputException("Could not change party with candidates linked");
+            }
+        } catch (FeignException e){
+            throw new GenericOutputException("Could not access Candidate service");
         }
     }
 
